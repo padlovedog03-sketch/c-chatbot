@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Stop hook: surface live background processes owned by this repo.
 
-Rule A4. A background harness that was believed dead kept running and its
-eight concurrent judges were misread as an Azure transient-failure rate — a
-wrong conclusion reported to the user before the real cause was found. A
-process nobody knows is running is also a live cost: these harnesses call
-Azure OpenAI.
+Rule A4. On the project this framework came from, a background harness that was
+believed dead kept running, and the load from its eight concurrent workers was
+misread as the cloud provider failing intermittently — a wrong cause, reported to
+the human before the real one was found. A process nobody knows is running is also
+a live cost, because these harnesses call paid APIs.
 
 Prints a notice on stop when anything matching this repo's harness/server
 shapes is still alive. Always exits 0 — this reports, it never blocks.

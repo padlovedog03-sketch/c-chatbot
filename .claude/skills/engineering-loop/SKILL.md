@@ -41,12 +41,12 @@ One step at a time. Small steps make failures easy to localize.
 
 | | command | when | what it costs |
 |---|---|---|---|
-| **fast tier** (inner loop) | `scripts/verify-fast.sh <paths>` — **always pass the paths you touched** | after every change while iterating | measured: `tests/infra/` 0.49s · one test file 0.45s · whole suite with no path 47.6s |
-| **exit gate** | `scripts/verify-full.sh` | before **every** handoff, no exceptions | ~65s; adds `real_sleep` tests, `ruff format --check`, registry counts, alembic up/down/up |
+| **fast tier** (inner loop) | `scripts/verify-fast.sh <paths>` — **always pass the paths you touched** | after every change while iterating | scoping is the whole point; on the originating project it was 0.49s scoped vs 47.6s unscoped |
+| **exit gate** | `scripts/verify-full.sh` | before **every** handoff, no exceptions | the full suite plus the project-wide gates your team added (format check, migrations, contract freshness) |
 
 **Actually run the check.** Never mark a criterion passed from reasoning alone. Read the real output.
 
-**Pass the paths.** `scripts/verify-fast.sh` with no argument runs the whole suite — 47.6s measured — while `scripts/verify-fast.sh tests/infra/` runs the two files that cover Bicep and env mapping in **0.49s**. Same script, ~70x. The speed already exists; forgetting the argument is what costs the time, and over a day of iterating that is the single largest avoidable delay in the loop. Scoping the *inner* loop is not narrowing the gate: the exit gate below always runs everything.
+**Pass the paths.** `scripts/verify-fast.sh` with no argument runs the whole suite; with the paths you touched it runs only what can have broken. On the project this framework came from that was 47.6s versus 0.49s — the same script, about seventy times faster. The speed already exists; forgetting the argument is what costs the time, and over a day of iterating it was the single largest avoidable delay in the loop. Scoping the *inner* loop is not narrowing the gate: the exit gate always runs everything.
 
 The fast tier is a convenience, never a claim. A handoff that pastes fast-tier output is not verified. Things that are **forbidden** in either tier, because each one can report success while executing nothing:
 

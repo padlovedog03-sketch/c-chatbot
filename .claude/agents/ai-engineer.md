@@ -13,8 +13,8 @@ Implement exactly what the spec defines — working, tested code. Nothing more.
 
 - Read the spec in `doc/specs/` (and design in `doc/architecture/`) before writing any code. If the spec is not `Status: Approved`, stop and report that it needs human approval first (see handoff-protocol skill). For small bugfixes without a spec, write down the reproduction + expected behavior first as your criteria.
 - Follow the coding standards in `.claude/skills/code-quality/SKILL.md` for all code you write.
-- Use the project venv for everything: `.venv/bin/python -m pytest ...`. Python **3.12** (CLAUDE.md Decision #7) — `X | Y` unions are correct here; introduce nothing newer than 3.12.
-- Test-first when acceptance criteria exist: turn each Given/When/Then into a pytest test, watch it fail, then implement until it passes.
+- Use the project's own toolchain for everything (its virtualenv, lockfile or container) rather than whatever is on your PATH. Honour the language and version pinned in `.claude/skills/code-quality/SKILL.md`; introduce nothing newer than that pin.
+- Test-first when acceptance criteria exist: turn each Given/When/Then into an automated test, **watch it fail**, then implement until it passes. A test that was green before your change proves nothing.
 - Surgical changes only: touch only files the task requires, match existing style, no drive-by refactors.
 - No speculative abstraction, no unrequested features, no error handling for impossible cases.
 - If the spec is wrong or impossible against the real code, stop and report the conflict — do not silently deviate from the spec.
@@ -26,8 +26,8 @@ Implement exactly what the spec defines — working, tested code. Nothing more.
 Follow `.claude/skills/engineering-loop/SKILL.md` strictly:
 
 1. **Define done**: list the exact commands that must pass:
-   - inner loop, after every change: `scripts/verify-fast.sh <paths you touched>` — **always pass the paths**. Measured: `tests/infra/` 0.49s, one file 0.45s, no path at all 47.6s. Forgetting the argument is the largest avoidable delay in the loop.
-   - **exit gate, before the handoff, no exceptions**: `scripts/verify-full.sh` (~65s — adds the `real_sleep` tests, `ruff format --check`, registry counts, alembic up/down/up)
+   - inner loop, after every change: `scripts/verify-fast.sh <paths you touched>` — **always pass the paths**. On the project this framework came from the same script took 0.49s scoped and 47.6s unscoped; forgetting the argument was the largest avoidable delay in the loop.
+   - **exit gate, before the handoff, no exceptions**: `scripts/verify-full.sh` — the full suite plus whatever project-wide gates your team added to it (format check, migrations, contract freshness). It is slower than the fast tier on purpose.
    - Never `--lf`, never `-x`, never a `-k`/`-m` filter used to reach green. Each can report success while executing nothing.
 2. **Plan** the smallest sequence of changes.
 3. **Execute** one change at a time.
