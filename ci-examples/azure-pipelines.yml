@@ -1,0 +1,93 @@
+# ตัวอย่าง CI สำหรับ Azure DevOps — คัดลอกไปไว้ที่รากของ repo แล้วปรับ
+#
+# ด่านเหมือนกับ ci-examples/github-actions.yml ทุกประการ ต่างแค่ไวยากรณ์
+# เหตุผลที่ต้องมีไฟล์นี้เขียนไว้ครบในไฟล์นั้น — อ่านที่นั่นก่อน
+#
+# ไฟล์นี้เป็น "ตัวอย่างให้คัดลอก" ไม่ใช่ของที่บังคับใช้ทันที
+
+trigger:
+  branches:
+    include: [main]
+pr:
+  branches:
+    include: ['*']
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  # ต้องดึงประวัติทั้งหมด เพราะด่านบางตัวเทียบกับ base branch
+  - checkout: self
+    fetchDepth: 0
+
+  # ---------------------------------------------------------------
+  # ด่าน 1 — เอกสารที่บอกว่า Approved ต้องมีคีย์อยู่ในทะเบียนจริง
+  #
+  # ด่านที่สำคัญที่สุด และเป็นเหตุผลที่ CI มีอยู่: เอเจนต์แก้ hook ในเครื่องได้
+  # แต่แก้ขั้นตอนนี้ไม่ได้ นี่คือชั้นเดียวที่ทำให้ "มีแต่มนุษย์ที่อนุมัติได้"
+  # เป็นจริงแทนที่จะเป็นความตั้งใจ
+  #
+  # ตั้ง secret variable ชื่อ APPROVAL_REGISTRY ให้มีเนื้อไฟล์ JSONL ของทะเบียน
+  # ---------------------------------------------------------------
+  - script: |
+      set -euo pipefail
+      printf '%s' "$APPROVAL_REGISTRY" > /tmp/registry.jsonl
+      python3 - <<'PY'
+      import json, pathlib, re, sys
+
+      keys = set()
+      for line in open('/tmp/registry.jsonl', encoding='utf-8'):
+          line = line.strip()
+          if line:
+              keys.add(json.loads(line)['key'])
+
+      status_re = re.compile(r'^Status:\s*(.+?)\s*$', re.M)
+      approval_re = re.compile(r'^Approval:\s*(.+?)\s*$', re.M)
+
+      problems = []
+      for path in sorted(pathlib.Path('doc').rglob('*.md')):
+          if 'templates' in path.parts or 'framework' in path.parts:
+              continue
+          text = path.read_text(encoding='utf-8')
+          status = status_re.search(text)
+          if not status or status.group(1) not in {'Approved', 'Done'}:
+              continue
+          approval = approval_re.search(text)
+          if not approval:
+              problems.append(f'{path}: Status {status.group(1)} with no Approval: line')
+          elif approval.group(1) not in keys:
+              problems.append(f'{path}: Approval key {approval.group(1)!r} is not in the registry')
+
+      if problems:
+          print('เอกสารที่อ้างว่าอนุมัติแล้วแต่พิสูจน์ไม่ได้:', file=sys.stderr)
+          for p in problems:
+              print('  -', p, file=sys.stderr)
+          print('\nคีย์ต้องถูกเพิ่มโดยมนุษย์เท่านั้น เอเจนต์เขียนทะเบียนไม่ได้', file=sys.stderr)
+          sys.exit(1)
+      print('ทุกเอกสารที่อนุมัติแล้วมีคีย์รองรับครบ')
+      PY
+    displayName: 'ทุกเอกสาร Approved/Done ต้องมีคีย์ในทะเบียน'
+    env:
+      APPROVAL_REGISTRY: $(APPROVAL_REGISTRY)
+
+  # ด่าน 2 — ประตูออกของโปรเจกต์ (ตั้งค่าภาษา/เครื่องมือให้ตรงกับทีมก่อนขั้นนี้)
+  - script: ./scripts/verify-full.sh
+    displayName: 'ประตูออก'
+
+  # ด่าน 3 — ห้ามมีตัวยึดหลงเหลือในไฟล์ที่ไม่ใช่ template
+  - script: |
+      set -euo pipefail
+      LEFT=$(grep -rn '<[A-Z_]\{3,\}>' .claude doc scripts CLAUDE.md README.md 2>/dev/null \
+             | grep -v 'doc/framework/' | grep -v 'doc/templates/' \
+             | grep -v 'scripts/bootstrap.sh' || true)
+      if [ -n "$LEFT" ]; then
+        echo "พบตัวยึดที่ยังไม่ได้เติม:" >&2
+        echo "$LEFT" >&2
+        exit 1
+      fi
+      echo "ไม่มีตัวยึดหลงเหลือ"
+    displayName: 'ไม่มีตัวยึดหลงเหลือ'
+
+  # ด่าน 4 — เทสต์ของด่านอัตโนมัติเอง
+  - script: python3 -m pytest tests/hooks/ -q
+    displayName: 'เทสต์ hook'
