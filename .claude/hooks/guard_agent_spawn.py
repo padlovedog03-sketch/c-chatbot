@@ -43,9 +43,20 @@ _GATED_SUBAGENT_TYPES = frozenset({"ai-engineer", "frontend-engineer"})
 _OVERRIDE_TOKEN = "NO_SPEC_BUGFIX:"
 _MIN_OVERRIDE_REASON_CHARS = 10
 
-# Spec references we accept in a prompt: a bare filename or a repo path.
+# Upstream references we accept in a prompt: a bare filename or a repo path.
+#
+# The prefixes must match what `.claude/skills/handoff-protocol/SKILL.md` mandates,
+# and each one lives in its own directory — a DESIGN document is not in `doc/specs/`.
+# Keeping the two in sync matters: a prefix this pattern does not accept cannot be
+# named as an upstream at all, so the gate silently demands the override token for
+# work that legitimately has an approved document behind it.
+_UPSTREAM_DIRS = {
+    "SPEC": "doc/specs",
+    "DESIGN": "doc/architecture",
+    "ADR": "doc/architecture",
+}
 _SPEC_REFERENCE_PATTERN = re.compile(
-    r"(?:doc/specs/)?((?:SPEC|FIELD-PARITY|ADR)-[A-Za-z0-9._-]+\.md)"
+    r"(?:doc/(?:specs|architecture)/)?((?:" + "|".join(_UPSTREAM_DIRS) + r")-[A-Za-z0-9._-]+\.md)"
 )
 
 _ALLOWED_STATUS = "Approved"
@@ -129,7 +140,9 @@ def main() -> None:
     problems: list[str] = []
     approved: list[str] = []
     for name in dict.fromkeys(references):  # de-duplicate, keep order
-        spec_path = root / "doc" / "specs" / Path(name).name
+        stem = Path(name).name
+        prefix = stem.split("-", 1)[0]
+        spec_path = root / _UPSTREAM_DIRS[prefix] / stem
         if not spec_path.is_file():
             problems.append(f"{name}: file not found at {spec_path.relative_to(root)}")
             continue
