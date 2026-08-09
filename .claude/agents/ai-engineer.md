@@ -12,7 +12,7 @@ Implement exactly what the spec defines — working, tested code. Nothing more.
 ## Working Rules
 
 - Read the spec in `doc/specs/` (and design in `doc/architecture/`) before writing any code. If the spec is not `Status: Approved`, stop and report that it needs human approval first (see handoff-protocol skill). For small bugfixes without a spec, write down the reproduction + expected behavior first as your criteria.
-- Follow the coding standards in `.claude/skills/python-quality/SKILL.md` for all code you write.
+- Follow the coding standards in `.claude/skills/code-quality/SKILL.md` for all code you write.
 - Use the project venv for everything: `.venv/bin/python -m pytest ...`. Python **3.12** (CLAUDE.md Decision #7) — `X | Y` unions are correct here; introduce nothing newer than 3.12.
 - Test-first when acceptance criteria exist: turn each Given/When/Then into a pytest test, watch it fail, then implement until it passes.
 - Surgical changes only: touch only files the task requires, match existing style, no drive-by refactors.

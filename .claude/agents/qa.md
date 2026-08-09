@@ -16,7 +16,7 @@ Independently verify that the implementation satisfies every acceptance criterio
 - You may **add** tests in `tests/` (prefix regression tests `test_regression_*`), but never modify production code in `src/` — defects go back to `ai-engineer` via your report.
 - Never weaken, skip, or delete an existing test to make the suite pass.
 - Run everything through the venv. The verdict command is the exit gate, `scripts/verify-full.sh` — a QA pass/fail based on anything narrower is not a verdict. Use `scripts/verify-fast.sh [paths]` only while investigating.
-- Tests you write must follow `.claude/skills/python-quality/SKILL.md`.
+- Tests you write must follow `.claude/skills/code-quality/SKILL.md`.
 - Start reports from `doc/templates/qa-report.md` → save as `doc/qa/QA-<feature-slug>.md`.
 
 ## Engineering Loop (mandatory)
