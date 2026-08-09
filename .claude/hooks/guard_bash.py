@@ -59,6 +59,9 @@ _ENV_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _TRANSPARENT_WRAPPERS = frozenset({"env", "exec", "nohup", "time", "sudo", "poetry", "uv"})
 
 
+_OVERRIDE_ASSIGNMENT = "ALLOW_DESTRUCTIVE=1"
+
+
 def _executable_segments(command: str) -> list[list[str]]:
     """Split a shell command into segments, each as its executable + args.
 
@@ -66,7 +69,15 @@ def _executable_segments(command: str) -> list[list[str]]:
     banned token in prose or in a test fixture is not treated as running it.
     """
     stripped = _HEREDOC_PATTERN.sub(" ", command)
-    stripped = _QUOTED_SPAN_PATTERN.sub(" ", stripped)
+    # Quotes are removed, their CONTENTS are not. Replacing a quoted span with a
+    # space deleted the argument inside it, so `git checkout "config.yaml"` reached
+    # the rules as a bare `git checkout` with no path — and a rule that needs a path
+    # to decide saw nothing and allowed it. Quoting an argument must not be a way
+    # through the gate. Prose and fixtures are still protected: a whole *command*
+    # mentioned inside quotes stays inert because the segment splitter only ever
+    # looks at the first token of each segment, and that token is the real
+    # executable (`grep`), not the quoted text.
+    stripped = _QUOTED_SPAN_PATTERN.sub(lambda m: " " + m.group(0)[1:-1] + " ", stripped)
 
     segments: list[list[str]] = []
     for raw in _SEGMENT_SPLIT_PATTERN.split(stripped):
@@ -173,6 +184,23 @@ def _block(message: str) -> None:
     sys.exit(2)
 
 
+def _has_head_override(command: str) -> bool:
+    """True only when `ALLOW_DESTRUCTIVE=1` is an env assignment on the first
+    segment, the position a shell would actually apply it.
+
+    Scoped deliberately: it waives the destructive-discard rule (A1') and nothing
+    else. An escape hatch that silences every rule at once is not an escape hatch,
+    it is an off switch.
+    """
+    first = _SEGMENT_SPLIT_PATTERN.split(command)[0]
+    for token in first.split():
+        if token == _OVERRIDE_ASSIGNMENT:
+            return True
+        if not _ENV_ASSIGNMENT_PATTERN.match(token):
+            return False
+    return False
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -186,14 +214,17 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
-    if "ALLOW_DESTRUCTIVE=1" in command:
-        sys.exit(0)
+    # The override is a *prefix*, not a word that appears somewhere. Substring
+    # matching let `echo ALLOW_DESTRUCTIVE=1 && git reset --hard` disable every rule
+    # in the file: the token was never run, merely printed. It must sit in the env
+    # assignment position of the first segment, exactly where a shell would apply it.
+    override = _has_head_override(command)
 
     segments = _executable_segments(command)
 
     for tokens in segments:
         reason = _git_discard_reason(tokens)
-        if reason and _tree_is_dirty():
+        if reason and _tree_is_dirty() and not override:
             _block(
                 f"BLOCKED (.claude/hooks/guard_bash.py, rule A1'): {reason}, and "
                 f"the working tree has uncommitted changes.\n"
