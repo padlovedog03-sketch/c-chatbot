@@ -10,10 +10,10 @@ least once during real work — into machine-enforced blocks:
   wave's config edits and took the suite from 1297 passed to 164 failed.
   Branch switches (`git checkout -b`, `git checkout <branch>`) and `git stash`
   are NOT blocked — they do not discard.
-* **A3** starting the dev backend by hand. A hand-rolled server invocation
-  broke CORS, the DB connection and the schema at once because it skipped
-  `.env.azure`, `PYTHONPATH=src` and `alembic upgrade`. The launcher
-  `scripts/run-backend-dev.sh` exists to make that unrepeatable.
+* **A3** starting the dev server by hand, when a launcher script exists.
+  Ships DISABLED — see the configuration block below. Enable it once your
+  project has a launcher, so the env file, import path and migrations can
+  never be skipped independently of each other.
 
 Matching is done on **command position**, not on substring presence. A naive
 substring match blocked this guard's own test harness and any `grep` for the
@@ -38,12 +38,31 @@ import re
 import subprocess
 import sys
 
-_LAUNCHER = "scripts/run-backend-dev.sh"
-
-# Programs that must never be launched directly (rule A3).
-_BANNED_SERVERS = frozenset({"uvicorn", "hypercorn", "gunicorn"})
-# `fastapi` is only a launch with these subcommands; `fastapi --help` is not.
-_FASTAPI_LAUNCH_SUBCOMMANDS = frozenset({"dev", "run"})
+# ---------------------------------------------------------------------------
+# RULE A3 — CONFIGURE THIS, IT SHIPS DISABLED
+#
+# A3 stops anyone starting the dev server by hand, forcing them through a launcher
+# script instead. It is off by default because this template does not know your
+# stack, and a rule that blocks a command nobody in your project runs is noise.
+#
+# TURN IT ON once you have a dev-server launcher, by filling in both settings:
+#     _LAUNCHER       = "scripts/run-dev.sh"
+#     _BANNED_SERVERS = frozenset({"uvicorn", "gunicorn"})   # or: next, vite, rails…
+#
+# WHY IT IS WORTH TURNING ON. In the project this framework came from, starting the
+# server by hand broke three things at once — cross-origin requests, the database
+# connection, and the schema — because the hand-rolled command skipped the env file,
+# the import path, and the pending migrations. Each failure looked unrelated to the
+# others, so the diagnosis cost far more than the mistake. The launcher exists to
+# make that combination unrepeatable, and this rule makes the launcher unavoidable.
+#
+# _SUBCOMMAND_LAUNCHERS handles programs that only start a server with certain
+# subcommands: `fastapi dev` starts one, `fastapi --help` does not. Leave it empty
+# unless your stack has that shape.
+_LAUNCHER = ""
+_BANNED_SERVERS: frozenset[str] = frozenset()
+_SUBCOMMAND_LAUNCHERS: dict[str, frozenset[str]] = {}
+# ---------------------------------------------------------------------------
 
 # Heredoc bodies are data, not commands — `<<'EOF' … EOF` and `<<EOF … EOF`.
 _HEREDOC_PATTERN = re.compile(
@@ -151,11 +170,13 @@ def _git_discard_reason(tokens: list[str]) -> str | None:
 
 def _direct_server_launch(tokens: list[str]) -> bool:
     """True when this segment launches an ASGI server directly (rule A3)."""
+    if not _BANNED_SERVERS and not _SUBCOMMAND_LAUNCHERS:
+        return False  # rule A3 not configured for this project
     program = _program_name(tokens[0])
     if program in _BANNED_SERVERS:
         return True
-    if program == "fastapi":
-        return any(token in _FASTAPI_LAUNCH_SUBCOMMANDS for token in tokens[1:])
+    if program in _SUBCOMMAND_LAUNCHERS:
+        return any(token in _SUBCOMMAND_LAUNCHERS[program] for token in tokens[1:])
     module = _module_target(tokens)
     return module in _BANNED_SERVERS
 
@@ -243,11 +264,11 @@ def main() -> None:
         if _direct_server_launch(tokens) and _LAUNCHER not in command:
             _block(
                 f"BLOCKED (.claude/hooks/guard_bash.py, rule A3): start the dev "
-                f"backend with `{_LAUNCHER}`, not a direct server command.\n"
-                f"The launcher loads `.env.azure`, sets `PYTHONPATH=src`, runs "
-                f"`alembic upgrade head` and passes `--reload`. Hand-rolled "
-                f"invocations have broken CORS, the DB connection and the schema "
-                f"at the same time."
+                f"server with `{_LAUNCHER}`, not a direct server command.\n"
+                f"The launcher exists so that the environment file, the import path "
+                f"and any pending migrations are always applied together. Starting "
+                f"the server by hand has broken all three at once, and each failure "
+                f"looked unrelated to the others."
             )
 
     sys.exit(0)

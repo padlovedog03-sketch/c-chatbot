@@ -16,14 +16,27 @@ from __future__ import annotations
 import subprocess
 import sys
 
-# Shapes worth reporting: our dev server, alembic, pytest, and any Python
-# running out of the scratchpad (where the measurement harnesses live).
+# ---------------------------------------------------------------------------
+# CONFIGURE THIS for your project.
+#
+# Command-line fragments worth reporting when a turn ends. The defaults are the
+# ones almost every project has; add your dev server, your migration tool, and
+# any scratch directory your measurement harnesses run from.
+#
+# WHY THIS HOOK EXISTS. A background process nobody remembers is running does two
+# kinds of harm, and both have happened. It keeps spending whatever the process
+# costs — cloud quota, a database connection, a paid API — long after anyone is
+# watching. And a forgotten harness has already produced one *wrong measurement*,
+# because a second copy of a job was still writing while a result was being read.
+# This hook does not stop anything; it just refuses to let a live process leave
+# the room silently.
 _PATTERNS = (
-    "run-backend-dev.sh",
-    "uvicorn",
-    "alembic",
     "pytest",
-    "scratchpad",
+    "npm run",
+    "node ",
+    # "uvicorn",              # your dev server
+    # "alembic",              # your migration tool
+    # "scratch",              # where measurement harnesses run
 )
 
 _SELF_MARKERS = ("stop_report_background", "grep ")
@@ -51,7 +64,7 @@ def main() -> None:
     if hits:
         print(
             "Live background processes owned by this repo are still running "
-            f"({len(hits)}). Each one may be spending Azure quota, and a "
+            f"({len(hits)}). Each one keeps spending whatever it costs, and a "
             "forgotten harness has already caused one wrong measurement:",
             file=sys.stderr,
         )
