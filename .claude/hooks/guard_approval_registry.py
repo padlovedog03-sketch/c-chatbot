@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deny agent writes to the human-only approval registry — the framework spec §3.B3, ADR-1.
 
-WHY THIS EXISTS: CLAUDE.md §7 rule 2 says only the human's approval flips an
+WHY THIS EXISTS: CLAUDE.md §6 rule 2 says only the human's approval flips an
 artifact to `Approved`. Nothing enforced that, because nothing distinguished a
 status an agent wrote from one a human approved. The registry is the evidence
 store; this hook stops an agent writing into it.
@@ -13,7 +13,7 @@ An agent has `Write` and `Bash` over the whole filesystem, and
 * This hook stops **accidental and casual** writes, loudly. That is worth having.
 * Keeping the registry **outside the repo** stops a stray `git add -A` from
   committing a forged approval.
-* The layer that actually **enforces** §7 rule 2 is the **CI check on a protected
+* The layer that actually **enforces** §6 rule 2 is the **CI check on a protected
   branch**, because an agent's edits to a local hook do not travel there.
 * The only genuinely unforgeable option is a **GPG-signed approval** whose
   passphrase lives in the human's keychain. That imposes real setup friction and
@@ -84,7 +84,7 @@ def main() -> None:
     print(
         f"BLOCKED (.claude/hooks/guard_approval_registry.py, rule B3): "
         f"{candidate} is the human-only approval registry.\n"
-        f"CLAUDE.md §7 rule 2: only the human's approval flips an artifact to "
+        f"CLAUDE.md §6 rule 2: only the human's approval flips an artifact to "
         f"`Approved`. An agent writing its own approval evidence is the exact "
         f"failure this registry exists to prevent.\n"
         f"If an artifact needs approving, present the handoff and end the turn. "
