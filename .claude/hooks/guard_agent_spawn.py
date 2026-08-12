@@ -13,8 +13,8 @@ substring matching to command-position matching.
 
 **Fail-closed, with an explicit override.** When the prompt names no spec the
 spawn is blocked, because a warning on a spawn is useless: by the time anyone
-reads it the subagent is already running. CLAUDE.md §6 does permit "small
-bugfixes may start at `ai-engineer`", so a no-spec spawn is sometimes legitimate
+reads it the subagent is already running. CLAUDE.md §5 does permit "small
+bugfixes may start at the engineer", so a no-spec spawn is sometimes legitimate
 — hence an override token rather than a prohibition, modelled on Set 1's
 `ALLOW_DESTRUCTIVE=1`: the choice becomes visible in the transcript instead
 of silent.
@@ -114,7 +114,7 @@ def main() -> None:
         _block(
             f"BLOCKED (.claude/hooks/guard_agent_spawn.py, rule A5): "
             f"`{_OVERRIDE_TOKEN}` is present but carries no reproduction.\n"
-            f"CLAUDE.md §6 allows a small bugfix to start at {subagent_type} "
+            f"CLAUDE.md §5 allows a small bugfix to start at {subagent_type} "
             f"without a spec, but the basis has to be stated. Write "
             f"`{_OVERRIDE_TOKEN} <one-line reproduction>` "
             f"(at least {_MIN_OVERRIDE_REASON_CHARS} characters)."
