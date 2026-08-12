@@ -385,3 +385,38 @@ def test_list_reports_what_awaits_approval_and_writes_nothing(repo: Path) -> Non
     assert "doc/specs/SPEC-pending-probe.md" in result.stdout
     assert "SPEC-finished-probe.md" not in result.stdout
     assert not registry.exists()
+
+
+def test_every_shipped_template_satisfies_the_approval_contract() -> None:
+    """The templates and the approval script must agree, or the pipeline dies
+    on its first real use.
+
+    `approve.py` refuses any document without a `## Approval history` section,
+    and the handoff protocol says every artifact starts from `doc/templates/`.
+    All three templates shipped WITHOUT that section, so the very first
+    document anyone created the prescribed way would have been refused —
+    two mechanisms, each internally consistent, disagreeing at the seam where
+    nobody was looking. Found 2026-08-12 by checking the templates against the
+    script's own contract rather than against each other.
+
+    Also pins exactly one canonical `Status:` line per template, the other
+    condition `validate` refuses on.
+
+    Injection run 2026-08-12: with the `## Approval history` section removed
+    from `doc/templates/spec.md` (its state before this was fixed), this test
+    went red naming that file, and nothing else in the suite noticed —
+    which is precisely how it shipped.
+    """
+    templates = sorted((Path(__file__).resolve().parents[2] / "doc" / "templates").glob("*.md"))
+    assert templates, "no templates found — the handoff protocol points at this directory"
+    for template in templates:
+        text = template.read_text(encoding="utf-8")
+        assert "\n## Approval history" in text, (
+            f"{template.name} lacks '## Approval history', so approve.py will refuse every "
+            f"document created from it"
+        )
+        status_lines = [ln for ln in text.splitlines() if ln.startswith("Status:")]
+        assert len(status_lines) == 1, (
+            f"{template.name} carries {len(status_lines)} canonical Status lines; "
+            f"approve.py refuses anything other than exactly one"
+        )
