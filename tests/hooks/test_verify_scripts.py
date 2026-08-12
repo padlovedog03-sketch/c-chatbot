@@ -60,6 +60,13 @@ _REAL_CI_STEP = '"ci-examples|python3 -m pytest tests/ci/ -q"'
 #: `_copy()` checks for it unconditionally, the same way it already does for
 #: `_REAL_NESTED_SUITE`.
 _REAL_CI_NESTED_SUITE = "python3 -m pytest tests/ci/ -q"
+#: The third permanent step, added alongside the Scar Forge's station tracker
+#: (`tests/scars/`, `scripts/scar_status.py`). Same reason as the two above:
+#: an un-stubbed copy has no `tests/scars/` or `doc/scars/` to run against.
+_REAL_SCAR_STEP = (
+    '"scar-forge|python3 -m pytest tests/scars/ -q && python3 scripts/scar_status.py"'
+)
+_REAL_SCAR_NESTED_SUITE = "python3 -m pytest tests/scars/ -q"
 _PLACEHOLDER_STEPS = (
     '"lint|echo TODO: set the lint command in scripts/verify-full.sh"',
     '"format|echo TODO: set the format --check command"',
@@ -85,6 +92,7 @@ def _copy(tmp_path: Path, source: Path, *replacements: tuple[str, str]) -> Path:
         body = body.replace(old, new, 1)
     assert _REAL_NESTED_SUITE not in body, "copy still invokes the hook suite — would recurse"
     assert _REAL_CI_NESTED_SUITE not in body, "copy still invokes the ci-examples suite — would recurse"
+    assert _REAL_SCAR_NESTED_SUITE not in body, "copy still invokes the scar-forge suite — would recurse"
     (tmp_path / "scripts").mkdir(exist_ok=True)
     probe = tmp_path / "scripts" / source.name
     probe.write_text(body, encoding="utf-8")
@@ -113,6 +121,7 @@ def test_the_gate_never_says_green_while_a_step_is_an_unfilled_placeholder(
         _FULL,
         (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'),
         (_REAL_CI_STEP, '"ci-examples|echo 11 passed"'),
+        (_REAL_SCAR_STEP, '"scar-forge|echo 16 passed"'),
     )
 
     result = _run(probe)
@@ -133,6 +142,7 @@ def test_a_placeholder_step_is_labelled_todo_not_ok(tmp_path: Path) -> None:
         _FULL,
         (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'),
         (_REAL_CI_STEP, '"ci-examples|echo 11 passed"'),
+        (_REAL_SCAR_STEP, '"scar-forge|echo 16 passed"'),
     )
 
     result = _run(probe)
@@ -152,6 +162,7 @@ def test_a_fully_configured_gate_can_still_reach_green(tmp_path: Path) -> None:
     replacements = [
         (_REAL_HOOK_STEP, '"hooks|echo hooks ran"'),
         (_REAL_CI_STEP, '"ci-examples|echo ci-examples ran"'),
+        (_REAL_SCAR_STEP, '"scar-forge|echo scar-forge ran"'),
     ]
     for placeholder in _PLACEHOLDER_STEPS:
         label = placeholder.split("|", 1)[0].strip('"')
@@ -174,6 +185,7 @@ def test_the_gate_reports_red_and_exits_1_when_a_configured_step_fails(tmp_path:
         _FULL,
         (_REAL_HOOK_STEP, '"hooks|false"'),
         (_REAL_CI_STEP, '"ci-examples|echo ci-examples ran"'),
+        (_REAL_SCAR_STEP, '"scar-forge|echo scar-forge ran"'),
     )
 
     result = _run(probe)
@@ -202,6 +214,15 @@ def test_the_gate_still_wires_in_the_ci_examples_suite(tmp_path: Path) -> None:
     body = _FULL.read_text(encoding="utf-8")
     assert _REAL_CI_STEP in body, "the exit gate no longer runs the CI-examples proof"
     assert "echo TODO" not in _REAL_CI_STEP, "the ci-examples step has decayed into a placeholder"
+
+
+def test_the_gate_still_wires_in_the_scar_forge_suite(tmp_path: Path) -> None:
+    """Same property, a third step over. The Scar Forge's station tracker
+    only means anything if it is actually run against this repo's real
+    `doc/scars/` on every handoff."""
+    body = _FULL.read_text(encoding="utf-8")
+    assert _REAL_SCAR_STEP in body, "the exit gate no longer runs the scar-forge proof"
+    assert "echo TODO" not in _REAL_SCAR_STEP, "the scar-forge step has decayed into a placeholder"
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +266,7 @@ def test_touching_any_framework_file_pulls_in_the_hook_suite(tmp_path: Path, pat
         _FAST,
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
     )
 
     result = _run(probe, path)
@@ -260,6 +282,7 @@ def test_an_unrelated_path_does_not_pay_for_the_hook_suite(tmp_path: Path) -> No
         _FAST,
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
     )
 
     result = _run(probe, "src/some/unrelated/module.py")
@@ -291,6 +314,7 @@ def test_touching_a_ci_examples_file_pulls_in_the_ci_examples_suite(
         _FAST,
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
     )
 
     result = _run(probe, path)
@@ -308,12 +332,60 @@ def test_touching_hook_files_does_not_pull_in_the_ci_examples_suite(tmp_path: Pa
         _FAST,
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
     )
 
     result = _run(probe, ".claude/hooks/guard_bash.py")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "NESTED-CI-SUITE-WOULD-RUN" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "scripts/scar_status.py",
+        "tests/scars/test_scar_status.py",
+        "doc/scars/SCAR-exit-gate-green-lie.md",
+        "doc/templates/SCAR.md",
+    ],
+)
+def test_touching_a_scar_forge_file_pulls_in_the_scar_forge_suite(
+    tmp_path: Path, path: str
+) -> None:
+    """The third mirror of `test_touching_any_framework_file_pulls_in_the_hook_suite`:
+    a change to the tracker, its template, or a scar record can silently
+    desync the forge's mechanically-checked claims from what the tracker
+    actually enforces."""
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+    )
+
+    result = _run(probe, path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NESTED-SCAR-SUITE-WOULD-RUN" in result.stdout, result.stdout
+
+
+def test_touching_hook_files_does_not_pull_in_the_scar_forge_suite(tmp_path: Path) -> None:
+    """Independence, the third way: the scar-forge trigger pays only for its
+    own paths."""
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+    )
+
+    result = _run(probe, ".claude/hooks/guard_bash.py")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NESTED-SCAR-SUITE-WOULD-RUN" not in result.stdout
 
 
 def test_the_fast_tier_does_not_say_ok_over_unconfigured_steps(tmp_path: Path) -> None:
@@ -329,6 +401,7 @@ def test_the_fast_tier_does_not_say_ok_over_unconfigured_steps(tmp_path: Path) -
         _FAST,
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
     )
 
     result = _run(probe, "tests/hooks/test_guard_bash_matrix.py")
@@ -349,6 +422,7 @@ def test_a_fully_configured_fast_tier_can_still_say_ok(tmp_path: Path) -> None:
         _FAST,
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
         (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_SCAR_NESTED_SUITE, "echo NESTED-SCAR-SUITE-WOULD-RUN"),
         ('LINT=(echo "TODO: set LINT in scripts/verify-fast.sh — e.g. ruff check")',
          'LINT=(echo "lint ran")'),
         ('TEST=(echo "TODO: set TEST in scripts/verify-fast.sh — e.g. pytest -q")',

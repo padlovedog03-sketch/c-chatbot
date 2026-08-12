@@ -52,6 +52,18 @@ case " $* " in
     ;;
 esac
 
+# The Scar Forge's station tracker (scripts/scar_status.py) has its own
+# mechanically-checked claims (a closed scar must carry a Station 6 date, a
+# scar's Status must not collide with the approval-registry vocabulary) — a
+# touch to the tracker, its template, or a scar record itself has to pay for
+# re-checking those, same as any other guard in this repo.
+case " $* " in
+  *"scripts/scar_status.py"* | *"tests/scars"* | *"doc/scars"* | *"doc/templates/SCAR.md"*)
+    echo "== scar-forge tests"
+    python3 -m pytest tests/scars/ -q
+    ;;
+esac
+
 if [ "$todo" -ne 0 ]; then
   echo "FAST VERIFY INCOMPLETE — ${todo} of 2 step(s) not configured; they verified NOTHING."
   echo "Fill LINT and TEST in scripts/verify-fast.sh."

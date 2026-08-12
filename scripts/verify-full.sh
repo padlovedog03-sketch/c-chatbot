@@ -22,6 +22,12 @@ STEPS=(
   # existed, ci-examples/ had never been run or tested at all — the layer the
   # whole framework calls "the real enforcement" had never made a sound.
   "ci-examples|python3 -m pytest tests/ci/ -q"
+  # Proves scripts/scar_status.py (the Scar Forge's station tracker, NORTH-STAR
+  # mechanism ๑) parses this repo's own real scar records correctly and still
+  # catches a closed-with-no-trace or out-of-order scar. Also runs the tracker
+  # itself: a Closed scar with no Station 6 date, or stations entered out of
+  # order, fails this step for real, not just in the test suite.
+  "scar-forge|python3 -m pytest tests/scars/ -q && python3 scripts/scar_status.py"
 )
 # -----------------------------------------------------------------------------
 

@@ -406,15 +406,25 @@ def test_every_shipped_template_satisfies_the_approval_contract() -> None:
     from `doc/templates/spec.md` (its state before this was fixed), this test
     went red naming that file, and nothing else in the suite noticed —
     which is precisely how it shipped.
+
+    `SCAR.md` is deliberately exempt from the `## Approval history` half:
+    `scripts/approve.py`'s `DOC_DIRS` does not include `doc/scars/`, and
+    `doc/templates/SCAR.md` itself explains why a scar closes on mechanical
+    evidence, not human approval, and uses a Status vocabulary
+    (`Open | In Forge | Closed`) chosen specifically so it can never collide
+    with the approval registry's `Approved`/`Done`. The one-canonical-Status-
+    line rule still applies to it — that grammar is universal.
     """
     templates = sorted((Path(__file__).resolve().parents[2] / "doc" / "templates").glob("*.md"))
     assert templates, "no templates found — the handoff protocol points at this directory"
+    exempt_from_approval_history = {"SCAR.md"}
     for template in templates:
         text = template.read_text(encoding="utf-8")
-        assert "\n## Approval history" in text, (
-            f"{template.name} lacks '## Approval history', so approve.py will refuse every "
-            f"document created from it"
-        )
+        if template.name not in exempt_from_approval_history:
+            assert "\n## Approval history" in text, (
+                f"{template.name} lacks '## Approval history', so approve.py will refuse every "
+                f"document created from it"
+            )
         status_lines = [ln for ln in text.splitlines() if ln.startswith("Status:")]
         assert len(status_lines) == 1, (
             f"{template.name} carries {len(status_lines)} canonical Status lines; "
