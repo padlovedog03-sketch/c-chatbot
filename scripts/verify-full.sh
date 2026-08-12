@@ -28,6 +28,11 @@ STEPS=(
   # itself: a Closed scar with no Station 6 date, or stations entered out of
   # order, fails this step for real, not just in the test suite.
   "scar-forge|python3 -m pytest tests/scars/ -q && python3 scripts/scar_status.py"
+  # Proves scripts/coordinator_lint.py (the mechanically-checked half of the
+  # Coordinator Constitution, NORTH-STAR mechanism ๓) still catches an
+  # untagged count claim, a truncating MEASURED: command, an untagged
+  # instruction, and a missing SELF-REPORT: block.
+  "coordinator|python3 -m pytest tests/coordinator/ -q"
 )
 # -----------------------------------------------------------------------------
 

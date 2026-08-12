@@ -423,6 +423,7 @@ _REAL_CI_STEP = '"ci-examples|python3 -m pytest tests/ci/ -q"'
 _REAL_SCAR_STEP = (
     '"scar-forge|python3 -m pytest tests/scars/ -q && python3 scripts/scar_status.py"'
 )
+_REAL_COORD_STEP = '"coordinator|python3 -m pytest tests/coordinator/ -q"'
 
 
 def test_gate_2_command_is_the_exit_gate_and_the_path_is_real_and_executable() -> None:
@@ -442,11 +443,14 @@ def test_gate_2_extracted_command_actually_runs(tmp_path: Path) -> None:
     replaced; every other line, including the placeholder/OK/FAIL/verdict
     logic, is the real file, byte for byte."""
     body = _FULL.read_text(encoding="utf-8")
-    for old in (_REAL_HOOK_STEP, _REAL_CI_STEP, _REAL_SCAR_STEP):
+    for old in (_REAL_HOOK_STEP, _REAL_CI_STEP, _REAL_SCAR_STEP, _REAL_COORD_STEP):
         assert body.count(old) == 1, f"expected exactly one {old!r} in {_FULL}"
     body = body.replace(_REAL_HOOK_STEP, '"hooks|echo hooks ran"', 1)
     body = body.replace(_REAL_CI_STEP, '"ci-examples|echo ci-examples ran"', 1)
     body = body.replace(_REAL_SCAR_STEP, '"scar-forge|echo scar-forge ran"', 1)
+    body = body.replace(
+        _REAL_COORD_STEP, '"coordinator|echo coordinator-constitution ran"', 1
+    )
 
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()

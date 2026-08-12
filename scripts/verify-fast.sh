@@ -64,6 +64,16 @@ case " $* " in
     ;;
 esac
 
+# The mechanically-checked half of the Coordinator Constitution
+# (scripts/coordinator_lint.py) has its own grammar checks that a touch to
+# the checker or its contract has to re-earn.
+case " $* " in
+  *"scripts/coordinator_lint.py"* | *"tests/coordinator"* | *"doc/framework/COORDINATOR-CONSTITUTION.md"*)
+    echo "== coordinator-constitution tests"
+    python3 -m pytest tests/coordinator/ -q
+    ;;
+esac
+
 if [ "$todo" -ne 0 ]; then
   echo "FAST VERIFY INCOMPLETE — ${todo} of 2 step(s) not configured; they verified NOTHING."
   echo "Fill LINT and TEST in scripts/verify-fast.sh."
