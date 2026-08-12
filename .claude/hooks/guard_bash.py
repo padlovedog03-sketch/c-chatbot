@@ -81,22 +81,40 @@ _TRANSPARENT_WRAPPERS = frozenset({"env", "exec", "nohup", "time", "sudo", "poet
 _OVERRIDE_ASSIGNMENT = "ALLOW_DESTRUCTIVE=1"
 
 
+def _defuse_quoted_span(match: re.Match[str]) -> str:
+    """Keep a quoted span's contents, minus any shell separator inside it.
+
+    Inside quotes, `|`, `;`, `&&`, newline, parens and backticks are literal
+    DATA — the shell never treats them as separators there. Feeding them to the
+    segment splitter invents command positions that cannot exist, and the
+    invented segment gets judged as if someone had run it.
+
+    Measured 2026-08-12: `grep -rnE 'foo|git reset --hard' .` was BLOCKED as a
+    destructive discard. The alternation inside the quotes was split on `|`, so
+    the second half became a segment whose executable was `git`. A read-only
+    search of the repo's own documentation could not be run — and this bit
+    during this framework's own leakage audit, on a sibling repo carrying an
+    older copy of this file, which is as close to a field report as it gets.
+    """
+    return " " + _SEGMENT_SPLIT_PATTERN.sub(" ", match.group(0)[1:-1]) + " "
+
+
 def _executable_segments(command: str) -> list[list[str]]:
     """Split a shell command into segments, each as its executable + args.
 
-    Heredoc bodies and quoted strings are removed first so that *mentioning* a
-    banned token in prose or in a test fixture is not treated as running it.
+    Heredoc bodies are dropped and quoted spans are defused first, so that
+    *mentioning* a banned token in prose or in a test fixture is not treated as
+    running it.
     """
     stripped = _HEREDOC_PATTERN.sub(" ", command)
     # Quotes are removed, their CONTENTS are not. Replacing a quoted span with a
     # space deleted the argument inside it, so `git checkout "config.yaml"` reached
     # the rules as a bare `git checkout` with no path — and a rule that needs a path
     # to decide saw nothing and allowed it. Quoting an argument must not be a way
-    # through the gate. Prose and fixtures are still protected: a whole *command*
-    # mentioned inside quotes stays inert because the segment splitter only ever
-    # looks at the first token of each segment, and that token is the real
-    # executable (`grep`), not the quoted text.
-    stripped = _QUOTED_SPAN_PATTERN.sub(lambda m: " " + m.group(0)[1:-1] + " ", stripped)
+    # through the gate. Prose and fixtures are still protected on both sides now:
+    # the splitter only looks at the first token of each segment, and a separator
+    # inside the quotes can no longer manufacture a segment of its own.
+    stripped = _QUOTED_SPAN_PATTERN.sub(_defuse_quoted_span, stripped)
 
     segments: list[list[str]] = []
     for raw in _SEGMENT_SPLIT_PATTERN.split(stripped):
