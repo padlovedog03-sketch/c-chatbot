@@ -44,6 +44,7 @@ PY
 mkdir -p ~/.claude/approvals && touch ~/.claude/approvals/registry.jsonl
 echo
 echo "เรียบร้อย — ทะเบียนอนุมัติอยู่ที่ ~/.claude/approvals/registry.jsonl (มนุษย์เท่านั้นที่เขียนได้)"
+echo "อนุมัติเอกสารด้วย: scripts/approve.sh --list แล้ว scripts/approve.sh <slug> --by <ชื่อคุณ>"
 
 # Report what is still unfilled. A placeholder that survives bootstrap is the most
 # expensive kind of leftover: it reads as real text, so nobody goes looking for it.
