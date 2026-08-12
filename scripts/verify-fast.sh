@@ -14,6 +14,36 @@ TEST=(echo "TODO: set TEST in scripts/verify-fast.sh — e.g. pytest -q")
 # -----------------------------------------------------------------------------
 
 [ $# -eq 0 ] && { echo "usage: $0 <paths…>   (ส่ง path ที่แตะเสมอ)" >&2; exit 2; }
+
+# A placeholder step runs `echo`, which exits 0. Counting it as a pass and then
+# printing OK is the same false assurance verify-full.sh used to commit, one
+# tier down — and this is the tier that runs dozens of times a day.
+todo=0
 echo "== lint";  "${LINT[@]}" "$@"
+case "${LINT[0]}${LINT[1]-}" in *"TODO: set"*) todo=$((todo + 1));; esac
 echo "== tests"; "${TEST[@]}" "$@"
+case "${TEST[0]}${TEST[1]-}" in *"TODO: set"*) todo=$((todo + 1));; esac
+
+# The framework's own teeth travel with every stack. Touching a hook, an
+# approval script, the file that REGISTERS the hooks, or any of their tests
+# runs the hook suite too — the fill-in commands above know nothing about it,
+# and a TODO stub passing is not evidence about a guard.
+#
+# `.claude/settings.json` is in this list for the quietest failure of the set:
+# an unregistered hook never runs, and the tests that catch exactly that
+# (`test_the_guard_is_registered_in_settings_json` and its siblings) would
+# otherwise be skipped by the very edit that breaks them.
+case " $* " in
+  *".claude/hooks"* | *"tests/hooks"* | *"scripts/approve"* \
+  | *"scripts/verify_approvals"* | *".claude/settings.json"*)
+    echo "== framework hook tests"
+    python3 -m pytest tests/hooks/ -q
+    ;;
+esac
+
+if [ "$todo" -ne 0 ]; then
+  echo "FAST VERIFY INCOMPLETE — ${todo} of 2 step(s) not configured; they verified NOTHING."
+  echo "Fill LINT and TEST in scripts/verify-fast.sh."
+  exit 0
+fi
 echo "FAST VERIFY OK"

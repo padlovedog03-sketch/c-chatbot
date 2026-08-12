@@ -12,13 +12,32 @@ STEPS=(
   "lint|echo TODO: set the lint command in scripts/verify-full.sh"
   "format|echo TODO: set the format --check command"
   "tests|echo TODO: set the full test command"
+  # The next one is NOT a placeholder — do not replace it. The framework's own
+  # guards ship with tests whatever your stack is, and if they go red a gate
+  # you rely on may be open again.
+  "hooks|python3 -m pytest tests/hooks/ -q"
 )
 # -----------------------------------------------------------------------------
 
 fail=0
+todo=0
+todo_labels=""
 echo "EXIT GATE — full verify"
 for entry in "${STEPS[@]}"; do
   label="${entry%%|*}"; cmd="${entry#*|}"
+  # An unfilled placeholder is neither a pass nor a failure, and must never be
+  # printed as "OK". A step whose command is still `echo TODO:` runs nothing,
+  # yet an `echo` exits 0 — so the honest-looking version of this loop reported
+  # OK three times and then declared the gate GREEN over a build that had not
+  # been linted, formatted or tested. That is this framework's first truth
+  # (a system reporting success while the truth is elsewhere) committed by the
+  # very script whose job is to prevent it.
+  if [[ "$cmd" == echo\ TODO:* ]]; then
+    printf '  %-5s%-18s%s\n' "TODO" "$label" "not configured — this step verified NOTHING"
+    todo=$((todo + 1))
+    todo_labels="${todo_labels} ${label}"
+    continue
+  fi
   if out=$(eval "$cmd" 2>&1); then
     printf '  %-5s%-18s%s\n' "OK" "$label" "$(printf '%s' "$out" | tail -1)"
   else
@@ -33,5 +52,15 @@ if [ "$fail" -ne 0 ]; then
   echo "Do not hand off. Diagnose the real cause; do not skip a test, loosen an assertion,"
   echo "or hardcode an expected value to make it pass."
   exit 1
+fi
+
+if [ "$todo" -ne 0 ]; then
+  # Deliberately exit 0: a fresh clone must not be wedged before bootstrap. But
+  # the word GREEN is withheld, because that word is what gets pasted into a
+  # handoff as evidence, and it would be evidence of nothing.
+  echo "EXIT GATE INCOMPLETE — ${todo} step(s) not configured:${todo_labels}"
+  echo "Everything configured passed, and that is ALL this run proves."
+  echo "Fill those steps in scripts/verify-full.sh before treating this output as a gate."
+  exit 0
 fi
 echo "EXIT GATE GREEN. Paste this output in the handoff — a claim without it does not count."
