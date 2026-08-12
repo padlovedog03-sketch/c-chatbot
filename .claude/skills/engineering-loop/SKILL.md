@@ -77,7 +77,7 @@ End with evidence:
 Each of these cost real time on this codebase. They are written as checkable conditions, not advice — answer each one before reporting.
 
 **1. Silent failure is the dominant defect class here.**
-For every new code path, ask: *what does this emit when it goes wrong, and is that distinguishable from success?* An empty list, a `0`, a default value and a `None` must never be able to mean "it broke". Real instances: Azure F0 truncated an 18-page document to 2 pages with no error; `FieldExtractionService.extract()` swallowed LLM failures into `[]`, so a timeout was recorded as recall 0.000 — a *measurement*, not an error; money coercion failed on the English word "Baht" and set confidence to 0.0, dropping correct values below the autofill floor.
+For every new code path, ask: *what does this emit when it goes wrong, and is that distinguishable from success?* An empty list, a `0`, a default value and a `None` must never be able to mean "it broke". Real instances: a document-processing service on its free tier truncated an 18-page file to 2 pages with no error; an extraction call swallowed model failures into `[]`, so a timeout was recorded as recall 0.000 — a *measurement*, not an error; a currency parser failed on the currency's English name and set confidence to 0.0, dropping correct values below the autofill floor.
 → Check: name the failure signal for each new path. If the answer is "it returns empty", that is a defect, not a design.
 
 **2. A guard you have not broken on purpose is not a guard.**
@@ -89,15 +89,15 @@ One `git checkout <path>` on a dirty tree destroyed a wave of config edits and t
 → Check: `git stash` or commit before any discard. If the discard is genuinely intended, use the `ALLOW_DESTRUCTIVE=1` prefix so the choice is on the record.
 
 **4. Do not relay a number you did not verify.**
-Numbers from a subagent, a heuristic script, or an earlier message get quoted as fact and reach the human wrong. Real instances: "~19 fields" and "159/7 <PROJECT>-confirmed" were relayed; the real values were 22 and 82/5/125.
+Numbers from a subagent, a heuristic script, or an earlier message get quoted as fact and reach the human wrong. Real instances: "~19 fields" and a confirmed-count of "159/7" were relayed; the real values were 22 and 82/5/125.
 → Check: before any count reaches a report, re-derive it with your own command, and sanity-check it against two or three facts you already know.
 
 **5. Never fuzzy-match an authoritative mapping.**
-A `difflib` matcher over Thai field labels reported "77 fields the Excel has that we don't", including fields that demonstrably existed. Thai catalogs phrase the same field differently, so surface similarity is uninformative.
+A `difflib` matcher over human-written field labels reported "77 fields the authoritative catalog has that we don't", including fields that demonstrably existed. Catalogs phrase the same field differently, so surface similarity is uninformative.
 → Check: fuzzy matching may rank candidates for a human or an LLM to judge. It may never decide an add/remove. That work is `ba-sa` reading rows.
 
-**6. PDPA: describe shapes, never quote real identifiers.**
-Two separate waves leaked real data into *docstrings documenting a finding* — real 13-digit juristic registration numbers, a real company name, real country tokens as OCR-corruption examples. The intent was legitimate every time, which is exactly why prose guidance fails.
+**6. Personal data: describe shapes, never quote real identifiers.**
+Two separate waves leaked real data into *docstrings documenting a finding* — real 13-digit registration numbers, a real company name, real place names used as text-recognition-corruption examples. The intent was legitimate every time, which is exactly why prose guidance fails.
 → Check: reproduce the example with a synthetic string of the same shape/length. Then scan tracked files only: `git ls-files | xargs grep -ilE "<pattern>"` — scanning the working tree includes the git-ignored source documents and buries the signal. Publicly-registered identifiers count too.
 
 **7. Do not measure a tree another agent is editing.**
@@ -105,5 +105,5 @@ A premise was reported wrong twice because the measurement was taken while a sub
 → Check: before measuring, confirm no agent owns the files. If one does, wait for its report.
 
 **8. A background process you believe is dead may not be.**
-Killing a shell does not always kill its Python child. Eight concurrent judges from a duplicated harness were misread as an Azure transient-failure rate, and a wrong conclusion reached the human. The Stop hook now reports live processes.
+Killing a shell does not always kill its Python child. Eight concurrent workers from a duplicated harness were misread as the cloud provider's transient-failure rate, and a wrong conclusion reached the human. The Stop hook now reports live processes.
 → Check: after killing anything, verify with `ps`, not with the kill command's exit code.
