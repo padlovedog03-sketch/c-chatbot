@@ -10,7 +10,17 @@
 
 name: gates
 
-on:
+# Quoted deliberately. YAML 1.1 (the spec most parsers, including PyYAML's
+# SafeLoader, actually implement) resolves the bare word `on` as the boolean
+# `true` — measured: `yaml.safe_load()` on this file's original unquoted form
+# returned a key of `True`, not the string `"on"`. GitHub's own workflow
+# parser special-cases this and accepts it either way, so the unquoted form
+# never breaks a run — but it breaks the moment anyone points a standard YAML
+# tool (a schema validator, a linter, this repo's own test) at the file, which
+# is exactly the "schema-specific mistake a generic YAML linter won't catch"
+# this file's proof exists to find. `tests/ci/test_ci_examples.py` pins the
+# fix.
+"on":
   pull_request:
   push:
     branches: [main]
@@ -37,10 +47,10 @@ jobs:
       # ---------------------------------------------------------------
       - name: ทุกเอกสาร Approved/Done ต้องมีคีย์ในทะเบียน
         env:
-          REGISTRY: ${{ secrets.APPROVAL_REGISTRY }}   # เนื้อไฟล์ JSONL
+          APPROVAL_REGISTRY: ${{ secrets.APPROVAL_REGISTRY }}   # เนื้อไฟล์ JSONL
         run: |
           set -euo pipefail
-          printf '%s' "$REGISTRY" > /tmp/registry.jsonl
+          printf '%s' "$APPROVAL_REGISTRY" > /tmp/registry.jsonl
           python3 - <<'PY'
           import json, pathlib, re, sys
 

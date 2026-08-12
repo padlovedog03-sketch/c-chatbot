@@ -5,13 +5,14 @@ it must be shown to make a sound. What is pinned here is that the gate cannot
 lie in the direction that matters — it must never print the word a handoff
 pastes as evidence (`GREEN`) over steps that ran nothing.
 
-WHY THIS FILE EXISTS. The template ships three of its four steps as
+WHY THIS FILE EXISTS. The template ships three of its five steps as
 `echo TODO: …` placeholders. An `echo` exits 0, so the loop printed:
 
     OK   lint              TODO: set the lint command in scripts/verify-full.sh
     OK   format            TODO: set the format --check command
     OK   tests             TODO: set the full test command
     OK   hooks             142 passed in 8.00s
+    OK   ci-examples       11 passed in 2.10s
     EXIT GATE GREEN. Paste this output in the handoff — …
 
 Measured 2026-08-12 on this repo, exit code 0. A fresh clone could paste that
@@ -41,11 +42,24 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FULL = _REPO_ROOT / "scripts" / "verify-full.sh"
 _FAST = _REPO_ROOT / "scripts" / "verify-fast.sh"
 
-#: The real step lines, so a copy can neutralise exactly the nested pytest call
+#: The real step lines, so a copy can neutralise exactly the nested pytest calls
 #: and nothing else. Asserted present, so this file goes red rather than quietly
 #: testing a script shape that no longer exists.
 _REAL_HOOK_STEP = '"hooks|python3 -m pytest tests/hooks/ -q"'
 _REAL_NESTED_SUITE = "python3 -m pytest tests/hooks/ -q"
+#: The second permanent (non-placeholder) step, added alongside the CI-examples
+#: proof (`tests/ci/`). It is not stubbed by `_REAL_NESTED_SUITE` above because
+#: it names a different directory — a copy that stubs only `_REAL_HOOK_STEP`
+#: would leave this one real, and the real command fails inside `tmp_path`
+#: (there is no `tests/ci/` there), turning an unrelated test red for a reason
+#: that has nothing to do with what it is testing. Every case below that
+#: neutralises the hooks step must neutralise this one too.
+_REAL_CI_STEP = '"ci-examples|python3 -m pytest tests/ci/ -q"'
+#: The nested call the second `case` block in `verify-fast.sh` runs, and the
+#: text embedded inside `_REAL_CI_STEP` above. Both scripts can contain it, so
+#: `_copy()` checks for it unconditionally, the same way it already does for
+#: `_REAL_NESTED_SUITE`.
+_REAL_CI_NESTED_SUITE = "python3 -m pytest tests/ci/ -q"
 _PLACEHOLDER_STEPS = (
     '"lint|echo TODO: set the lint command in scripts/verify-full.sh"',
     '"format|echo TODO: set the format --check command"',
@@ -70,6 +84,7 @@ def _copy(tmp_path: Path, source: Path, *replacements: tuple[str, str]) -> Path:
         assert body.count(old) == 1, f"expected exactly one {old!r}, found {body.count(old)}"
         body = body.replace(old, new, 1)
     assert _REAL_NESTED_SUITE not in body, "copy still invokes the hook suite — would recurse"
+    assert _REAL_CI_NESTED_SUITE not in body, "copy still invokes the ci-examples suite — would recurse"
     (tmp_path / "scripts").mkdir(exist_ok=True)
     probe = tmp_path / "scripts" / source.name
     probe.write_text(body, encoding="utf-8")
@@ -93,7 +108,12 @@ def test_the_gate_never_says_green_while_a_step_is_an_unfilled_placeholder(
     `test_a_placeholder_step_is_labelled_todo_not_ok` both went red, because the
     gate printed `OK` three times and then `EXIT GATE GREEN`. Reverted.
     """
-    probe = _copy(tmp_path, _FULL, (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'))
+    probe = _copy(
+        tmp_path,
+        _FULL,
+        (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'),
+        (_REAL_CI_STEP, '"ci-examples|echo 11 passed"'),
+    )
 
     result = _run(probe)
 
@@ -108,7 +128,12 @@ def test_the_gate_never_says_green_while_a_step_is_an_unfilled_placeholder(
 
 def test_a_placeholder_step_is_labelled_todo_not_ok(tmp_path: Path) -> None:
     """`OK` next to a step that ran `echo` is the lie in miniature."""
-    probe = _copy(tmp_path, _FULL, (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'))
+    probe = _copy(
+        tmp_path,
+        _FULL,
+        (_REAL_HOOK_STEP, '"hooks|echo 142 passed"'),
+        (_REAL_CI_STEP, '"ci-examples|echo 11 passed"'),
+    )
 
     result = _run(probe)
 
@@ -124,7 +149,10 @@ def test_a_placeholder_step_is_labelled_todo_not_ok(tmp_path: Path) -> None:
 def test_a_fully_configured_gate_can_still_reach_green(tmp_path: Path) -> None:
     """The complement, without which a gate that ALWAYS withheld GREEN would
     satisfy every other test here."""
-    replacements = [(_REAL_HOOK_STEP, '"hooks|echo hooks ran"')]
+    replacements = [
+        (_REAL_HOOK_STEP, '"hooks|echo hooks ran"'),
+        (_REAL_CI_STEP, '"ci-examples|echo ci-examples ran"'),
+    ]
     for placeholder in _PLACEHOLDER_STEPS:
         label = placeholder.split("|", 1)[0].strip('"')
         replacements.append((placeholder, f'"{label}|echo {label} ran for real"'))
@@ -141,7 +169,12 @@ def test_a_fully_configured_gate_can_still_reach_green(tmp_path: Path) -> None:
 def test_the_gate_reports_red_and_exits_1_when_a_configured_step_fails(tmp_path: Path) -> None:
     """The other half: a gate that cannot go red is decoration. A real failure
     must also outrank the INCOMPLETE verdict — red is the louder truth."""
-    probe = _copy(tmp_path, _FULL, (_REAL_HOOK_STEP, '"hooks|false"'))
+    probe = _copy(
+        tmp_path,
+        _FULL,
+        (_REAL_HOOK_STEP, '"hooks|false"'),
+        (_REAL_CI_STEP, '"ci-examples|echo ci-examples ran"'),
+    )
 
     result = _run(probe)
 
@@ -159,6 +192,16 @@ def test_the_gate_still_wires_in_the_framework_hook_suite(tmp_path: Path) -> Non
     body = _FULL.read_text(encoding="utf-8")
     assert _REAL_HOOK_STEP in body, "the exit gate no longer runs the framework hook suite"
     assert "echo TODO" not in _REAL_HOOK_STEP, "the hook step has decayed into a placeholder"
+
+
+def test_the_gate_still_wires_in_the_ci_examples_suite(tmp_path: Path) -> None:
+    """Same property, one step over. `tests/ci/` proves `ci-examples/` still
+    runs what it claims to run — a proof that only means anything if the exit
+    gate actually executes it on every handoff, not just when someone
+    remembers to."""
+    body = _FULL.read_text(encoding="utf-8")
+    assert _REAL_CI_STEP in body, "the exit gate no longer runs the CI-examples proof"
+    assert "echo TODO" not in _REAL_CI_STEP, "the ci-examples step has decayed into a placeholder"
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +240,12 @@ def test_touching_any_framework_file_pulls_in_the_hook_suite(tmp_path: Path, pat
     `case` pattern, this row alone went red — editing the file that decides
     whether any guard runs at all triggered no guard test. Reverted.
     """
-    probe = _copy(tmp_path, _FAST, (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"))
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+    )
 
     result = _run(probe, path)
 
@@ -207,12 +255,65 @@ def test_touching_any_framework_file_pulls_in_the_hook_suite(tmp_path: Path, pat
 
 def test_an_unrelated_path_does_not_pay_for_the_hook_suite(tmp_path: Path) -> None:
     """The false-positive half: the fast tier stays fast for ordinary work."""
-    probe = _copy(tmp_path, _FAST, (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"))
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+    )
 
     result = _run(probe, "src/some/unrelated/module.py")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "NESTED-HOOK-SUITE-WOULD-RUN" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "ci-examples/github-actions.yml",
+        "ci-examples/azure-pipelines.yml",
+        "tests/ci/test_ci_examples.py",
+        "scripts/verify-full.sh",
+        "scripts/bootstrap.sh",
+    ],
+)
+def test_touching_a_ci_examples_file_pulls_in_the_ci_examples_suite(
+    tmp_path: Path, path: str
+) -> None:
+    """The mirror of `test_touching_any_framework_file_pulls_in_the_hook_suite`,
+    one tier over: a change to a CI example, the exit gate, or bootstrap's
+    placeholder list is exactly the kind of edit that can silently desync
+    `ci-examples/` from what it claims to run, so it has to pay for the proof
+    at the fast tier too."""
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+    )
+
+    result = _run(probe, path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NESTED-CI-SUITE-WOULD-RUN" in result.stdout, result.stdout
+
+
+def test_touching_hook_files_does_not_pull_in_the_ci_examples_suite(tmp_path: Path) -> None:
+    """The two triggers are independent: the hook suite and the CI-examples
+    suite each pay only for their own paths, so neither slows down for the
+    other's changes."""
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+    )
+
+    result = _run(probe, ".claude/hooks/guard_bash.py")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NESTED-CI-SUITE-WOULD-RUN" not in result.stdout
 
 
 def test_the_fast_tier_does_not_say_ok_over_unconfigured_steps(tmp_path: Path) -> None:
@@ -223,7 +324,12 @@ def test_the_fast_tier_does_not_say_ok_over_unconfigured_steps(tmp_path: Path) -
     removed, this test alone went red — the fast tier printed `FAST VERIFY OK`
     after two steps that ran `echo`. Reverted.
     """
-    probe = _copy(tmp_path, _FAST, (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"))
+    probe = _copy(
+        tmp_path,
+        _FAST,
+        (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
+    )
 
     result = _run(probe, "tests/hooks/test_guard_bash_matrix.py")
 
@@ -242,6 +348,7 @@ def test_a_fully_configured_fast_tier_can_still_say_ok(tmp_path: Path) -> None:
         tmp_path,
         _FAST,
         (_REAL_NESTED_SUITE, "echo NESTED-HOOK-SUITE-WOULD-RUN"),
+        (_REAL_CI_NESTED_SUITE, "echo NESTED-CI-SUITE-WOULD-RUN"),
         ('LINT=(echo "TODO: set LINT in scripts/verify-fast.sh — e.g. ruff check")',
          'LINT=(echo "lint ran")'),
         ('TEST=(echo "TODO: set TEST in scripts/verify-fast.sh — e.g. pytest -q")',

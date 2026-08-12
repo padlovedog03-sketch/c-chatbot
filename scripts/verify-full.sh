@@ -12,10 +12,16 @@ STEPS=(
   "lint|echo TODO: set the lint command in scripts/verify-full.sh"
   "format|echo TODO: set the format --check command"
   "tests|echo TODO: set the full test command"
-  # The next one is NOT a placeholder — do not replace it. The framework's own
+  # The next two are NOT placeholders — do not replace them. The framework's own
   # guards ship with tests whatever your stack is, and if they go red a gate
   # you rely on may be open again.
   "hooks|python3 -m pytest tests/hooks/ -q"
+  # Proves the CI examples in ci-examples/ still do what they claim: every
+  # command they run for real matches this repo's actual scripts, and the
+  # registry/placeholder checks they inline still bite. Before this step
+  # existed, ci-examples/ had never been run or tested at all — the layer the
+  # whole framework calls "the real enforcement" had never made a sound.
+  "ci-examples|python3 -m pytest tests/ci/ -q"
 )
 # -----------------------------------------------------------------------------
 

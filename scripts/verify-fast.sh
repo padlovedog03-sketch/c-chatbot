@@ -41,6 +41,17 @@ case " $* " in
     ;;
 esac
 
+# Touching a CI example, the exit gate itself, or bootstrap's placeholder list
+# can silently desync ci-examples/ from what it claims to run — that is the
+# exact failure tests/ci/ exists to catch, so a touch to any of these paths
+# has to pay for it here too, not just at the exit gate.
+case " $* " in
+  *"ci-examples"* | *"tests/ci"* | *"scripts/verify-full.sh"* | *"scripts/bootstrap.sh"*)
+    echo "== ci-examples drift tests"
+    python3 -m pytest tests/ci/ -q
+    ;;
+esac
+
 if [ "$todo" -ne 0 ]; then
   echo "FAST VERIFY INCOMPLETE — ${todo} of 2 step(s) not configured; they verified NOTHING."
   echo "Fill LINT and TEST in scripts/verify-fast.sh."
